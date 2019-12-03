@@ -85,13 +85,20 @@ class CommandCompileC: Command {
 
     required init?(desc: String, content: [String]) {
         let arr = desc.split(separator: " ")
-        guard arr.count == 10 else { return nil }
+        guard arr.count == 7 else { return nil }
         self.outputPath = String(arr[1])
         self.inputPath = String(arr[2])
         self.arch = String(arr[4])
         self.lang = String(arr[5])
 
-        let _target = arr.last!.replacingOccurrences(of: ")", with: "")
+        var _target = ""
+        if let cmd = content.last {
+            let results = matches(for: "-fmodule-name=(\\w+)", in: cmd)
+            if let moduleName = results.first?.split(separator: "=")[1] {
+                _target = String(moduleName)
+            }
+        }
+        
         super.init(target: _target, name: String(arr[0]), content: content)
     }
 
@@ -153,10 +160,12 @@ class CommandCompileSwiftSources: Command {
 
     required init?(desc: String, content: [String]) {
         let arr = desc.split(separator: " ")
-        guard arr.count == 7 else { return nil }
+        guard arr.count == 4 else { return nil }
         self.arch = String(arr[2])
-        let _target = arr.last!.replacingOccurrences(of: ")", with: "")
-
+        var _target = ""
+        if let cmd = content.last, let range = cmd.rangeOfOptionContent(option: "-module-name", reverse: false) {
+            _target = String(cmd[range])
+        }
         super.init(target: _target, name: String(arr[0]), content: content)
         if var lastLine = content.last, let range = lastLine.range(of: "-whole-module-optimization") {
             lastLine.replaceSubrange(range, with: "")
@@ -221,16 +230,15 @@ class CommandCompileSwift: Command {
 
     required init?(desc: String, content: [String]) {
         let arr = desc.split(separator: " ")
-        if arr.count == 7 {
+        if arr.count == 4 {
             self.arch = String(arr[2])
             self.inputPath = String(arr[3])
-            let _target = arr.last!.replacingOccurrences(of: ")", with: "")
+            
+            var _target = ""
+            if let cmd = content.last, let range = cmd.rangeOfOptionContent(option: "-module-name", reverse: false) {
+                _target = String(cmd[range])
+            }
 
-            super.init(target: _target, name: String(arr[0]), content: content)
-        } else if arr.count == 6 { // this situation may be removed
-            self.arch = String(arr[2])
-            self.inputPath = nil
-            let _target = arr.last!.replacingOccurrences(of: ")", with: "")
             super.init(target: _target, name: String(arr[0]), content: content)
         } else { return nil }
     }
@@ -312,10 +320,10 @@ class CommandMergeSwiftModule: Command {
 
     init?(desc: String, content: [String]) {
         let arr = desc.split(separator: " ")
-        guard arr.count == 6 else { return nil }
+        guard arr.count == 4 else { return nil }
         self.arch = String(arr[2])
-        let _target = arr.last!.replacingOccurrences(of: ")", with: "")
-        super.init(target: _target, name: String(arr[0]), content: content)
+        let _target = arr.last!.split(separator: "/").last!.split(separator: ".").first!
+        super.init(target: String(_target), name: String(arr[0]), content: content)
     }
 
     enum MergeSwiftModuleKeys: String, CodingKey
@@ -384,14 +392,13 @@ class CommandLd: Command {
     var outputPath: String
     var arch: String
 
-
     init?(desc: String, content: [String]) {
         let arr = desc.split(separator: " ")
-        guard arr.count == 7 else { return nil }
+        guard arr.count == 4 else { return nil }
         self.outputPath = String(arr[1])
         self.arch = String(arr[3])
-        let _target = arr.last!.replacingOccurrences(of: ")", with: "")
-        super.init(target: _target, name: String(arr[0]), content: content)
+        let _target = self.outputPath.split(separator: "/").last ?? ""
+        super.init(target: String(_target), name: String(arr[0]), content: content)
     }
 
     enum LdKeys: String, CodingKey

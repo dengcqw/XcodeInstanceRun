@@ -14,7 +14,6 @@ protocol LogSource {
 struct FileSource: LogSource {
     var filePath: String
     func getStreamReader() -> StreamReader? {
-        print(filePath)
         let pathURL = URL(fileURLWithPath: filePath)
         return StreamReader(url: pathURL, chunkSize: 40960)
     }
@@ -56,6 +55,16 @@ func addCommand(_ commands: inout [String: [Command]], _ command: Command) {
     }
     sameTargetCommands.append(command)
     commands[command.target] = sameTargetCommands
+}
+
+func isCommand(_ text: String) -> Bool {
+    return text.starts(with: "CompileSwift")
+        || text.starts(with: "CompileC")
+        || text.starts(with: "CompileSwiftSources")
+        || text.starts(with: "MergeSwiftModule")
+        || text.starts(with: "Ld")
+        || text.starts(with: "CodeSign")
+        || text.starts(with: "GenerateDSYMFile")
 }
 
 func createCommand(commandLines: [String]) -> Command? {
@@ -106,9 +115,7 @@ func parse(_ logSource: LogSource, simulator: Bool) {
     
     while let line = reader?.nextLine() {
         let text = String(line)
-        let results = matches(for: "in target: (\\w+)", in: text)
-        assert(results.count < 2)
-        if results.count == 1 {
+        if isCommand(text) {
             if tmpStack.count != 0 { // save old command
                 if let command = createCommand(commandLines: tmpStack) {
                     addCommand(&commands, command)

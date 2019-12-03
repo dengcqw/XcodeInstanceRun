@@ -125,9 +125,12 @@ struct BuildCommand: CommandProtocol {
             // -workspace TVGuor.xcworkspace -scheme TVGuor -configuration Debug -arch arm64
             
             // let cleancmd = "xcodebuild clean \(options.xcode)  -derivedDataPath \(workingDir)/DerivedData"
-            let cleancmd = "rm -r \(productBundlePath())/*.app"
+            let orderedTargets = restoreOrderedTargets()
+            let cleancmd = orderedTargets.reduce([]) { (result, target) -> [String] in
+                return result + ["rm -r \(productBundlePath())/\(target)*"]
+            }
             let buildcmd = "xcodebuild build \(options.xcode) SWIFT_COMPILATION_MODE=singlefile SWIFT_WHOLE_MODULE_OPTIMIZATION=NO -derivedDataPath \(workingDir)/DerivedData | tee  \(cacheDir())/lastbuild.log"
-            let scriptCmd = [cleancmd, buildcmd].joined(separator: ";")
+            let scriptCmd = (cleancmd + [buildcmd]).joined(separator: ";")
             if options.buildonly {
                 _ = Bash().execute(script: scriptCmd)
                 return .success(())

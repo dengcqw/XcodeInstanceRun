@@ -11,7 +11,7 @@ import Foundation
 private let getProjectInfo = "xcodebuild -list -json -project"
 
 func getProjectTargets() -> [String] {
-    let dirPath = FileManager.default.currentDirectoryPath
+    let dirPath =  "/Users/dengjinlong/Documents/8-tvguo/2-TVGuoiOSApp"//FileManager.default.currentDirectoryPath
     if let projectFile = findFile(prefix: nil, suffix: ".xcodeproj", inFolder: dirPath).first {
         let handle = Bash().execute(script: "\(getProjectInfo) \(dirPath)/\(projectFile)")
         if let result = readStringSync(fileHandle: handle),
