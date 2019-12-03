@@ -85,13 +85,20 @@ class CommandCompileC: Command {
 
     required init?(desc: String, content: [String]) {
         let arr = desc.split(separator: " ")
-        guard arr.count == 10 else { return nil }
+        guard arr.count == 7 else { return nil }
         self.outputPath = String(arr[1])
         self.inputPath = String(arr[2])
         self.arch = String(arr[4])
         self.lang = String(arr[5])
 
-        let _target = arr.last!.replacingOccurrences(of: ")", with: "")
+        var _target = ""
+        if let cmd = content.last {
+            let results = matches(for: "-fmodule-name=(\\w+)", in: cmd)
+            if let moduleName = results.first?.split(separator: "=")[1] {
+                _target = String(moduleName)
+            }
+        }
+        
         super.init(target: _target, name: String(arr[0]), content: content)
     }
 
@@ -153,10 +160,12 @@ class CommandCompileSwiftSources: Command {
 
     required init?(desc: String, content: [String]) {
         let arr = desc.split(separator: " ")
-        guard arr.count == 7 else { return nil }
+        guard arr.count == 4 else { return nil }
         self.arch = String(arr[2])
-        let _target = arr.last!.replacingOccurrences(of: ")", with: "")
-
+        var _target = ""
+        if let cmd = content.last, let range = cmd.rangeOfOptionContent(option: "-module-name", reverse: false) {
+            _target = String(cmd[range])
+        }
         super.init(target: _target, name: String(arr[0]), content: content)
         if var lastLine = content.last, let range = lastLine.range(of: "-whole-module-optimization") {
             lastLine.replaceSubrange(range, with: "")
@@ -218,19 +227,22 @@ class CommandCompileSwift: Command {
 
     var arch: String
     var inputPath: String?
+    var outputPath: String?
 
     required init?(desc: String, content: [String]) {
         let arr = desc.split(separator: " ")
-        if arr.count == 7 {
+        if arr.count == 4 {
             self.arch = String(arr[2])
             self.inputPath = String(arr[3])
-            let _target = arr.last!.replacingOccurrences(of: ")", with: "")
+            
+            var _target = ""
+            if let cmd = content.last, let range = cmd.rangeOfOptionContent(option: "-module-name", reverse: true) {
+                _target = String(cmd[range])
+            }
+            if let cmd = content.last, let range = cmd.rangeOfOptionContent(option: "-o", reverse: true) {
+                self.outputPath = String(cmd[range])
+            }
 
-            super.init(target: _target, name: String(arr[0]), content: content)
-        } else if arr.count == 6 { // this situation may be removed
-            self.arch = String(arr[2])
-            self.inputPath = nil
-            let _target = arr.last!.replacingOccurrences(of: ")", with: "")
             super.init(target: _target, name: String(arr[0]), content: content)
         } else { return nil }
     }
@@ -239,6 +251,7 @@ class CommandCompileSwift: Command {
     {
         case arch
         case inputPath
+        case outputPath
     }
 
     required init(from decoder: Decoder) throws
@@ -246,6 +259,7 @@ class CommandCompileSwift: Command {
         let values = try decoder.container(keyedBy: CompileSwiftKeys.self)
         self.arch = try values.decode(String.self, forKey: .arch)
         self.inputPath = try values.decode(String.self, forKey: .inputPath)
+        self.outputPath = try values.decode(String.self, forKey: .outputPath)
         try super.init(from: decoder)
     }
 
@@ -254,6 +268,7 @@ class CommandCompileSwift: Command {
         var container = encoder.container(keyedBy: CompileSwiftKeys.self)
         try container.encode(arch, forKey: .arch)
         try container.encode(inputPath, forKey: .inputPath)
+        try container.encode(outputPath, forKey: .outputPath)
         try super.encode(to: encoder)
     }
 
@@ -267,19 +282,21 @@ class CommandCompileSwift: Command {
 
     override func prepare(_ content: [String]) -> [String] {
         guard let lastLine = content.last else { return [] }
-        if let inputPath = inputPath {
+        if let inputPath = inputPath, var outputPath = outputPath {
             guard let fileName = inputPath.getFileNameWithoutType() else { return [] }
             var newLine = lastLine
             newLine.replaceCommandLineParam(withPrefix: "-c", replaceString: "-c")
             newLine.replaceCommandLineParam(withPrefix: "-primary-file", replaceString: "-primary-file $FILEPATH")
             newLine = newLine.replacingOccurrences(of: fileName, with: "$FILENAME")
+            outputPath = outputPath.replacingOccurrences(of: fileName, with: "$FILENAME")
+            
 
             if lastLine.contains("-filelist") {
                 newLine.replaceCommandLineParam(withPrefix: "-filelist", replaceString: "-filelist $SourceFileList")
             } else {
                 newLine.append(" -filelist $SourceFileList")
             }
-            return super.prepare(content.dropLast() + [newLine])
+            return super.prepare(["rm \(outputPath)"] + content.dropLast() + [newLine])
         } else {
             let replaceText = "-primary-file $FILEPATH " +
                 "-emit-module-path $ObjectsPATH/$FILENAME~partial.swiftmodule " +
@@ -312,10 +329,10 @@ class CommandMergeSwiftModule: Command {
 
     init?(desc: String, content: [String]) {
         let arr = desc.split(separator: " ")
-        guard arr.count == 6 else { return nil }
+        guard arr.count == 4 else { return nil }
         self.arch = String(arr[2])
-        let _target = arr.last!.replacingOccurrences(of: ")", with: "")
-        super.init(target: _target, name: String(arr[0]), content: content)
+        let _target = arr.last!.split(separator: "/").last!.split(separator: ".").first!
+        super.init(target: String(_target), name: String(arr[0]), content: content)
     }
 
     enum MergeSwiftModuleKeys: String, CodingKey
@@ -384,14 +401,13 @@ class CommandLd: Command {
     var outputPath: String
     var arch: String
 
-
     init?(desc: String, content: [String]) {
         let arr = desc.split(separator: " ")
-        guard arr.count == 7 else { return nil }
+        guard arr.count == 4 else { return nil }
         self.outputPath = String(arr[1])
         self.arch = String(arr[3])
-        let _target = arr.last!.replacingOccurrences(of: ")", with: "")
-        super.init(target: _target, name: String(arr[0]), content: content)
+        let _target = self.outputPath.split(separator: "/").last ?? ""
+        super.init(target: String(_target), name: String(arr[0]), content: content)
     }
 
     enum LdKeys: String, CodingKey

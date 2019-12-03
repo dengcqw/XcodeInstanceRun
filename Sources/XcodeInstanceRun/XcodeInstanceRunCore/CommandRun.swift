@@ -15,6 +15,7 @@ func supportFile(_ line: String) -> Bool {
         || line.hasSuffix(".mm")
         || line.hasSuffix(".c")
         || line.hasSuffix(".png")
+        || line.hasSuffix(".xib")
 }
 
 let statusPrefixLength = 3
@@ -138,7 +139,7 @@ func runCommand(target: String, simulator: Bool) {
         // assume last target is main target, copy png for it
         if orderedTargets.last == target {
             modifiedFiles
-                .filter{ $0.hasSuffix(".png") }
+                .filter{ $0.hasSuffix(".png") || $0.hasSuffix(".xib") }
                 .forEach({ (file) in
                     if let command = getCommand(commands: allCommands[orderedTargets.last!]!, commandName: getFileCommandName(file)) {
                         command.execute(params: [workingDir + "/" + file]) { (output) in
@@ -174,7 +175,7 @@ func copyAppBundle(to dest: String, isSimulator: Bool) {
     let app = "\(src)/*.app"
     let dsym = "\(src)/*.app.dSYM"
     
-    let cmd = "cp -rf \(app) \(dsym) \(dest)"
+    let cmd = "cp -Rf \(app) \(dsym) \(dest)"
     
     _ = Bash().execute(script: cmd)
 }

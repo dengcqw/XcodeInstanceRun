@@ -144,7 +144,7 @@ public extension String {
     /// find content range of option
     ///
     /// - parameters
-    ///    option   an command option which has content
+    ///    option   an command option which has content, like   "-o filepath",  filepath range will return
     ///    reverse    if enumrate chars from endIndex
     func rangeOfOptionContent(option: String, reverse: Bool) -> Range<String.Index>? {
         if reverse {
