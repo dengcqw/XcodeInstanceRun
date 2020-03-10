@@ -539,10 +539,10 @@ class CommandCodeSign: Command {
 
     required init?(desc: String, content: [String]) {
         let arr = desc.split(separator: " ")
-        guard arr.count == 5 else { return nil }
+        guard arr.count == 2 else { return nil }
         self.outputPath = String(arr[1])
-        let _target = arr.last!.replacingOccurrences(of: ")", with: "")
-        super.init(target: _target, name: String(arr[0]), content: content)
+        let _target = self.outputPath.split(separator: "/").last!.split(separator: ".").first!
+        super.init(target: String(_target), name: String(arr[0]), content: content)
     }
 
     enum CodeSignKeys: String, CodingKey {
