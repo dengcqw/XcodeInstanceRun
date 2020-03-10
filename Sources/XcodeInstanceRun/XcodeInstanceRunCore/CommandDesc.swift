@@ -236,11 +236,8 @@ class CommandCompileSwift: Command {
             self.inputPath = String(arr[3])
             
             var _target = ""
-            if let cmd = content.last, let range = cmd.rangeOfOptionContent(option: "-module-name", reverse: true) {
+            if let cmd = content.last, let range = cmd.rangeOfOptionContent(option: "-module-name", reverse: false) {
                 _target = String(cmd[range])
-            }
-            if let cmd = content.last, let range = cmd.rangeOfOptionContent(option: "-o", reverse: true) {
-                self.outputPath = String(cmd[range])
             }
 
             super.init(target: _target, name: String(arr[0]), content: content)
