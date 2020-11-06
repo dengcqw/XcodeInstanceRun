@@ -94,7 +94,7 @@ func storeOrderedTargets(_ targets: [String]) {
 }
 
 func restoreOrderedTargets() -> [String] {
-    if let data = try? Data.init(contentsOf: URL(fileURLWithPath: orderedTargetsPath()), options: []),
+    if let data = try? Data(contentsOf: URL(fileURLWithPath: orderedTargetsPath()), options: []),
         let storage = try? JSONDecoder().decode([String].self, from: data) {
         return storage
     } else {
@@ -118,12 +118,16 @@ func storeCommands(_ commands: [String: [Command]]) {
 
 func restoreCommands() -> [String: [Command]]? {
     var storage = [String: [Command]]()
-    if let data = try? Data.init(contentsOf: URL(fileURLWithPath: archivePath()), options: []),
-        let commands = try? JSONDecoder().decode([String: [CommandStorage]].self, from: data) {
-        for (target, commandStorages) in commands {
-            storage[target] = commandStorages.map { $0.command }
+    if let data = try? Data.init(contentsOf: URL(fileURLWithPath: archivePath()), options: []) {
+        do {
+            let commands = try JSONDecoder().decode([String: [CommandStorage]].self, from: data)
+            for (target, commandStorages) in commands {
+                storage[target] = commandStorages.map { $0.command }
+            }
+            return storage
+        } catch let err {
+            print("restore command try-catched: \(err)")
         }
-        return storage
     }
     
     return storage

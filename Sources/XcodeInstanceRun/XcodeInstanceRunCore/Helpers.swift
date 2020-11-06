@@ -75,17 +75,17 @@ func orderedTargetsPath() -> String {
 var GloablSimulator: Bool = false
 
 func cacheDir() -> String {
-    let workingDir = FileManager.default.currentDirectoryPath + "/.FastCompile" + (GloablSimulator ? "/simulator" : "/iphoneos")
-    if !FileManager.default.fileExists(atPath:  workingDir) {
+    let dir = workingDir + "/.FastCompile" + (GloablSimulator ? "/simulator" : "/iphoneos")
+    if !FileManager.default.fileExists(atPath:  dir) {
         do {
-            try FileManager.default.createDirectory(atPath: workingDir, withIntermediateDirectories: true, attributes: nil)
-            return workingDir
+            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: nil)
+            return dir
         } catch _ {
             assert(false, "create working dir fail")
         }
         return ""
     } else {
-        return workingDir
+        return dir
     }
 }
 

@@ -226,8 +226,7 @@ class CommandCompileSwiftSources: Command {
 class CommandCompileSwift: Command {
 
     var arch: String
-    var inputPath: String?
-    var outputPath: String?
+    var inputPath: String
 
     required init?(desc: String, content: [String]) {
         let arr = desc.split(separator: " ")
@@ -248,7 +247,6 @@ class CommandCompileSwift: Command {
     {
         case arch
         case inputPath
-        case outputPath
     }
 
     required init(from decoder: Decoder) throws
@@ -256,7 +254,6 @@ class CommandCompileSwift: Command {
         let values = try decoder.container(keyedBy: CompileSwiftKeys.self)
         self.arch = try values.decode(String.self, forKey: .arch)
         self.inputPath = try values.decode(String.self, forKey: .inputPath)
-        self.outputPath = try values.decode(String.self, forKey: .outputPath)
         try super.init(from: decoder)
     }
 
@@ -265,7 +262,6 @@ class CommandCompileSwift: Command {
         var container = encoder.container(keyedBy: CompileSwiftKeys.self)
         try container.encode(arch, forKey: .arch)
         try container.encode(inputPath, forKey: .inputPath)
-        try container.encode(outputPath, forKey: .outputPath)
         try super.encode(to: encoder)
     }
 
@@ -279,13 +275,13 @@ class CommandCompileSwift: Command {
 
     override func prepare(_ content: [String]) -> [String] {
         guard let lastLine = content.last else { return [] }
-        if let inputPath = inputPath, var outputPath = outputPath {
+        if !inputPath.isEmpty {
             guard let fileName = inputPath.getFileNameWithoutType() else { return [] }
             var newLine = lastLine
             newLine.replaceCommandLineParam(withPrefix: "-c", replaceString: "-c")
             newLine.replaceCommandLineParam(withPrefix: "-primary-file", replaceString: "-primary-file $FILEPATH")
             newLine = newLine.replacingOccurrences(of: fileName, with: "$FILENAME")
-            outputPath = outputPath.replacingOccurrences(of: fileName, with: "$FILENAME")
+            //outputPath = outputPath.replacingOccurrences(of: fileName, with: "$FILENAME")
             
 
             if lastLine.contains("-filelist") {
@@ -293,7 +289,7 @@ class CommandCompileSwift: Command {
             } else {
                 newLine.append(" -filelist $SourceFileList")
             }
-            return super.prepare(["rm \(outputPath)"] + content.dropLast() + [newLine])
+            return super.prepare(content.dropLast() + [newLine])
         } else {
             let replaceText = "-primary-file $FILEPATH " +
                 "-emit-module-path $ObjectsPATH/$FILENAME~partial.swiftmodule " +
@@ -322,7 +318,7 @@ class CommandCompileSwift: Command {
 
 class CommandMergeSwiftModule: Command {
     var arch: String
-    var swiftmodulePath: String?
+    var swiftmodulePath: String = ""
 
     init?(desc: String, content: [String]) {
         let arr = desc.split(separator: " ")

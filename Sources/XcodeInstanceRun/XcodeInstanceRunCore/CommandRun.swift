@@ -116,13 +116,17 @@ func runCommand(target: String, simulator: Bool) {
             print("read [\(target)] source file list error")
             return
         }
-        let commands = allCommands[target]!
+        
+        guard let commands = allCommands[target] else {
+            print("restore comand error")
+            return
+        }
         
         var sourceChaned = false
         var objPath: String = ""
         for cmd in commands {
             if cmd is CommandMergeSwiftModule {
-                objPath = (cmd as! CommandMergeSwiftModule).swiftmodulePath ?? ""
+                objPath = (cmd as! CommandMergeSwiftModule).swiftmodulePath
             }
         }
         for file in modifiedFiles.filter({ sourceFileList.contains($0) }) {

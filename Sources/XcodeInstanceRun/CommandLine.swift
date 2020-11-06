@@ -129,7 +129,7 @@ struct BuildCommand: CommandProtocol {
             let cleancmd = orderedTargets.reduce([]) { (result, target) -> [String] in
                 return result + ["rm -r \(productBundlePath())/\(target)*"]
             }
-            let buildcmd = "xcodebuild build \(options.xcode) SWIFT_COMPILATION_MODE=singlefile SWIFT_WHOLE_MODULE_OPTIMIZATION=NO -derivedDataPath \(workingDir)/DerivedData | tee  \(cacheDir())/lastbuild.log"
+            let buildcmd = "xcodebuild build \(options.xcode) SWIFT_COMPILATION_MODE=Incremental SWIFT_WHOLE_MODULE_OPTIMIZATION=NO -derivedDataPath \(workingDir)/DerivedData | tee  \(cacheDir())/lastbuild.log"
             let scriptCmd = (cleancmd + [buildcmd]).joined(separator: ";")
             if options.buildonly {
                 _ = Bash().execute(script: scriptCmd)
