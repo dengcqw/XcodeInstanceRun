@@ -76,26 +76,23 @@ func runOtherOtherCommand(_ commands: [Command]) {
     }
 
     commands
-        .filter { $0.name == "MergeSwiftModule" }
+        .filter { $0.name == CommandNames.MergeSwiftModule.rawValue }
         .forEach { execute($0) }
     commands
-        .filter { $0.name == "PBXCp" }
+        .filter { $0.name == CommandNames.PBXCp.rawValue }
         .forEach { execute($0) }
     commands
-        .filter { $0.name == "Ld" }
+        .filter { $0.name == CommandNames.Ld.rawValue }
         .forEach { execute($0) }
     commands
-        .filter { $0.name == "GenerateDSYMFile" }
+        .filter { $0.name == CommandNames.GenerateDSYMFile.rawValue }
         .forEach { execute($0) }
-    // code sign in same target coubld be more then one
     commands
-        .filter { $0.name == "CodeSign" }
+        .filter { $0.name == CommandNames.CodeSign.rawValue }
         .forEach { execute($0) }
 }
 
-func runCommand(target: String, simulator: Bool) {
-    GloablSimulator = simulator
-
+func runCommand() {
     let orderedTargets = restoreOrderedTargets()
     guard orderedTargets.count > 0 else { return }
     let modifiedFiles = getModifiedFiles()
@@ -145,10 +142,9 @@ func runCommand(target: String, simulator: Bool) {
             modifiedFiles
                 .filter{ $0.hasSuffix(".png") || $0.hasSuffix(".xib") }
                 .forEach({ (file) in
-                    print(file)
                     if let command = getCommand(commands: commands, commandName: getFileCommandName(file)) {
                         print("\(command.target) \(command.name) \(file)")
-                        command.execute(params: [workingDir + "/" + file]) { (output) in
+                        command.execute(params: [file]) { (output) in
                             if let output = output {
                                 print("output \(command.name): \(output)")
                             }
@@ -163,10 +159,10 @@ func runCommand(target: String, simulator: Bool) {
     } // end forEach
 }
 
-func bridgingHeader() {
-    guard let commands = restoreCommands()?.values.first else { return }
+func bridgingHeader(_ target: String) {
+    guard let commands = restoreCommands()?[target] else { return }
     commands
-        .filter { $0.name == "PrecompileSwiftBridgingHeader" }
+        .filter { $0.name == CommandNames.PrecompileSwiftBridgingHeader.rawValue }
         .forEach {
             print("build bridgingHeader")
             $0.execute(params: [], done: { (output) in

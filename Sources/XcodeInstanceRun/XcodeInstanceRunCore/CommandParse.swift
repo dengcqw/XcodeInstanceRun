@@ -136,7 +136,6 @@ func createCommand(target: String, commandLines: [String]) -> Command? {
 }
 
 func parse(_ logSource: LogSource, simulator: Bool) {
-    GloablSimulator = simulator
 
     let reader = logSource.getStreamReader()
     var commands: [String: [Command]] = [:]

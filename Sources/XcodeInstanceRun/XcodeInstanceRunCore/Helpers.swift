@@ -7,8 +7,8 @@
 
 import Foundation
 
-func productBundlePath() -> String {
-    let appDir = GloablSimulator ? "Debug-iphonesimulator" : "Debug-iphoneos"
+func productBundlePath(_ isSimulator: Bool) -> String {
+    let appDir = isSimulator ? "Debug-iphonesimulator" : "Debug-iphoneos"
     return "\(workingDir)/DerivedData/Build/Products/\(appDir)"
 }
 
@@ -72,21 +72,22 @@ func orderedTargetsPath() -> String {
     return cacheDir() + "/orderedTargets.json"
 }
 
-var GloablSimulator: Bool = false
-
-func cacheDir() -> String {
-    let dir = workingDir + "/.FastCompile" + (GloablSimulator ? "/simulator" : "/iphoneos")
+var _cacheDir: String = ""
+func setCacheDir(_ isSimulator: Bool) {
+    let dir = workingDir + "/.FastCompile" + (isSimulator ? "/simulator" : "/iphoneos")
     if !FileManager.default.fileExists(atPath:  dir) {
         do {
             try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true, attributes: nil)
-            return dir
         } catch _ {
             assert(false, "create working dir fail")
         }
-        return ""
-    } else {
-        return dir
     }
+    _cacheDir = dir
+}
+
+func cacheDir() -> String {
+    assert(_cacheDir != "")
+    return _cacheDir
 }
 
 

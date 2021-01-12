@@ -13,22 +13,23 @@ struct CopyCommand: CommandProtocol {
     typealias Options = CopyOptions
     let verb = "copy"
     let function = "copy app bundle and dsym to specified path"
-    
+
     func run(_ options: Options) -> Result<(), CommandError> {
         if options.copyTo == "" {
             return .failure(.unknown)
         }
+        setCacheDir(options.simulator)
         copyAppBundle(to: options.copyTo, isSimulator: options.simulator)
         return .success(())
     }
     struct CopyOptions: OptionsProtocol {
         let simulator: Bool
         let copyTo: String
-        
-        static func create(_ simulator: Bool) -> (String) -> CopyOptions {
+
+        static func create(_ simulator: Bool) -> (String) -> Self {
             return  { copyTo in CopyOptions(simulator: simulator, copyTo: copyTo) }
         }
-        
+
         static func evaluate(_ m: CommandMode) -> Result<CopyOptions, CommandantError<CommandError>> {
             return create
                 <*> m <| Switch(flag: "s", key: "simulator", usage: "copy simulator product")
@@ -39,13 +40,29 @@ struct CopyCommand: CommandProtocol {
 
 struct BuildBridgingheaderCommand: CommandProtocol {
     typealias ClientError = CommandError
-    typealias Options = NoOptions<CommandError>
     let verb = "bridgingHeader"
     let function = "build bridgingHeader for objc and swift mix project"
-    
-    func run(_ options: Options) -> Result<(), CommandError> {
-        bridgingHeader()
+
+    func run(_ options: BridgingHeaderOptions) -> Result<(), CommandError> {
+        print(options)
+        setCacheDir(options.simulator)
+        bridgingHeader(options.target)
         return .success(())
+    }
+
+    struct BridgingHeaderOptions: OptionsProtocol {
+        let target: String
+        let simulator: Bool
+
+        static func create(_ simulator: Bool) -> (String) -> Self {
+            return { target in BridgingHeaderOptions(target: target, simulator: simulator)}
+        }
+
+        static func evaluate(_ m: CommandMode) -> Result<BridgingHeaderOptions, CommandantError<CommandError>> {
+            return create
+                <*> m <| Switch(flag: "s", key: "simulator", usage: "run for simulator")
+                <*> m <| Option(key: "target", defaultValue: "", usage: "Each target has its own BridgingHeader")
+        }
     }
 }
 
@@ -54,18 +71,19 @@ struct DeployCommand: CommandProtocol {
     typealias Options = DeployOptions
     let verb = "deploy"
     let function = "deploy to simulator or iphoneos"
-    
+
     func run(_ options: Options) -> Result<(), CommandError> {
+        setCacheDir(options.simulator)
         iosDeploy(simulator: options.simulator)
         return .success(())
     }
     struct DeployOptions: OptionsProtocol {
         let simulator: Bool
-        
-        static func create(_ simulator: Bool) -> DeployOptions {
+
+        static func create(_ simulator: Bool) -> Self {
             return DeployOptions(simulator: simulator)
         }
-        
+
         static func evaluate(_ m: CommandMode) -> Result<DeployOptions, CommandantError<CommandError>> {
             return create
                 <*> m <| Switch(flag: "s", key: "simulator", usage: "copy simulator product")
@@ -78,24 +96,23 @@ struct RunCommand: CommandProtocol {
     typealias Options = RunOptions
     let verb = "compile"
     let function = "compile modified objc or swift files, copy pngs"
-    
+
     func run(_ options: Options) -> Result<(), CommandError> {
-        runCommand(target: options.target, simulator: options.simulator)
+        setCacheDir(options.simulator)
+        runCommand()
         return .success(())
     }
-    
+
     struct RunOptions: OptionsProtocol {
         let simulator: Bool
-        let target: String
-        
-        static func create(_ simulator: Bool) -> (String) -> RunOptions {
-            return  { target in RunOptions(simulator: simulator, target: target) }
+
+        static func create(_ simulator: Bool) -> Self {
+            return RunOptions(simulator: simulator)
         }
-        
+
         static func evaluate(_ m: CommandMode) -> Result<RunOptions, CommandantError<CommandError>> {
             return create
                 <*> m <| Switch(flag: "s", key: "simulator", usage: "copy simulator product")
-                <*> m <| Option(key: "target", defaultValue: "", usage: "run given target")
         }
     }
 }
@@ -105,12 +122,12 @@ struct BuildCommand: CommandProtocol {
     typealias Options = BuildOptions
     let verb = "build"
     let function = "build project and generate cache files for fast compile"
-    
+
     func run(_ options: Options) -> Result<(), CommandError> {
         print(options)
-        
-        GloablSimulator = options.simulator
-        
+
+        setCacheDir(options.simulator)
+
         var logSource: LogSource?
         if options.xcode != "" {
             // TODO: how to clean only one target
@@ -123,11 +140,11 @@ struct BuildCommand: CommandProtocol {
              whole module building cause symbol mixed
              */
             // -workspace TVGuor.xcworkspace -scheme TVGuor -configuration Debug -arch arm64
-            
-            // let cleancmd = "xcodebuild clean \(options.xcode)  -derivedDataPath \(workingDir)/DerivedData"
+
+            // clear executable object only and keep other cached modules
             let orderedTargets = restoreOrderedTargets()
             let cleancmd = orderedTargets.reduce([]) { (result, target) -> [String] in
-                return result + ["rm -r \(productBundlePath())/\(target)*"]
+                return result + ["rm -r \(productBundlePath(options.simulator))/\(target)*"]
             }
             let buildcmd = "xcodebuild build \(options.xcode) SWIFT_COMPILATION_MODE=Incremental SWIFT_WHOLE_MODULE_OPTIMIZATION=NO -derivedDataPath \(workingDir)/DerivedData | tee  \(cacheDir())/lastbuild.log"
             let scriptCmd = (cleancmd + [buildcmd]).joined(separator: ";")
@@ -150,18 +167,18 @@ struct BuildCommand: CommandProtocol {
             return .failure(.invalidArgument(description: "not set compile source"))
         }
     }
-    
+
     struct BuildOptions: OptionsProtocol {
         let xcode: String
         let stdin: Bool
         let logPath: String
         let simulator: Bool
         let buildonly: Bool
-        
-        static func create(_ xcode: String) -> (Bool) -> (String) -> (Bool) -> (Bool) -> BuildOptions {
+
+        static func create(_ xcode: String) -> (Bool) -> (String) -> (Bool) -> (Bool) -> Self {
             return { stdin in { logPath in { simulator in { buildonly in BuildOptions(xcode: xcode, stdin: stdin, logPath: logPath, simulator: simulator, buildonly: buildonly) } } } }
         }
-        
+
         static func evaluate(_ m: CommandMode) -> Result<BuildOptions, CommandantError<CommandError>> {
             return create
                 <*> m <| Option(key: "xcode", defaultValue: "", usage: "xcodebuild params to generate cache files\nXcodeInstanceRun build --xcode \"\\-workspace TVGuor.xcworkspace \\-scheme TVGuor \\-configuration Debug \\-arch arm64\"")
@@ -177,7 +194,7 @@ enum CommandError: Error, CustomStringConvertible {
     case invalidArgument(description: String)
     case unknown
     case other(Error)
-    
+
     /// An error message corresponding to this error.
     var description: String {
         switch self {

@@ -524,10 +524,14 @@ class CommandCopyPNGFile: Command {
     }
 
     override func execute(params: [String], done: (String?) -> Void) {
-        guard let lastSlash = self.outputPath.lastIndex(of: "/") else { return }
+        // get new input filename
         guard let fileNameSlash = params[0].lastIndex(of: "/") else { return }
         let fileName  = params[0].suffix(from: fileNameSlash)
+
+        // replace output filename with new filename
+        guard let lastSlash = self.outputPath.lastIndex(of: "/") else { return }
         let output = self.outputPath.prefix(upTo: lastSlash) + fileName
+
         let defines = ["INPUT=\(params[0])", "OUTPUT=\(output)"]
         super.execute(params: defines, done: done)
     }
