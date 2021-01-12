@@ -27,9 +27,6 @@ struct CommandStorage: Codable {
     {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         self.name = try values.decode(String.self, forKey: .name)
-        // FixMe: Lost class type
-        // self.command = try values.decode(CommandStorage.commandType(self.name) as! Command.Type, forKey: .command)
-        
         // get class type
         switch name {
         case "CompileSwift":
@@ -59,29 +56,6 @@ struct CommandStorage: Codable {
         try container.encode(name, forKey: .name)
         try container.encode(command, forKey: .command)
     }
-    /*
-    static func commandType(_ name: String) -> AnyClass {
-        switch name {
-        case "CompileSwift":
-            return CommandCompileSwift.self
-        case "CompileC":
-            return CommandCompileC.self
-        case "CopyPNGFile":
-            return CommandCopyPNGFile.self
-        case "CompileXIB":
-            return CommandCompileXIB.self
-        case "CompileSwiftSources":
-            return CommandCompileSwiftSources.self
-        case "MergeSwiftModule":
-            return CommandMergeSwiftModule.self
-        case "Ld":
-            return CommandLd.self
-        case "CodeSign":
-            return CommandCodeSign.self
-        default:
-            return Command.self
-        }
-    } */
 }
 
 func storeOrderedTargets(_ targets: [String]) {

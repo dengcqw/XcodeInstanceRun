@@ -29,9 +29,9 @@ class Command: Codable, CommandDescription {
     }
 
     func execute(params: [String], done: (String?)->Void) {
-        print("==== \(name) ====")
         let bash: CommandExecuting = Bash()
-        guard let fileHandle = bash.execute(script: (params + content).joined(separator: ";")) else {
+        // ignore compile warnings output
+        guard let fileHandle = bash.execute(script: (params + content).joined(separator: ";") + " &>/dev/null") else {
             done(nil)
             return
         }
@@ -83,7 +83,7 @@ class CommandCompileC: Command {
     var arch: String
     var lang: String
 
-    required init?(desc: String, content: [String]) {
+    required init?(desc: String, content: [String], target: String = "") {
         let arr = desc.split(separator: " ")
         guard arr.count == 7 else { return nil }
         self.outputPath = String(arr[1])
@@ -92,13 +92,15 @@ class CommandCompileC: Command {
         self.lang = String(arr[5])
 
         var _target = ""
-        if let cmd = content.last {
+        if target != "" {
+            _target = target
+        } else if let cmd = content.last {
             let results = matches(for: "-fmodule-name=(\\w+)", in: cmd)
             if let moduleName = results.first?.split(separator: "=")[1] {
                 _target = String(moduleName)
             }
         }
-        
+
         super.init(target: _target, name: String(arr[0]), content: content)
     }
 
@@ -158,12 +160,14 @@ class CommandCompileSwiftSources: Command {
     var arch: String
     var wholeModuleOptimization: Bool = false
 
-    required init?(desc: String, content: [String]) {
+    required init?(desc: String, content: [String], target: String = "") {
         let arr = desc.split(separator: " ")
         guard arr.count == 4 else { return nil }
         self.arch = String(arr[2])
         var _target = ""
-        if let cmd = content.last, let range = cmd.rangeOfOptionContent(option: "-module-name", reverse: false) {
+        if target != "" {
+            _target = target
+        } else if let cmd = content.last, let range = cmd.rangeOfOptionContent(option: "-module-name", reverse: false) {
             _target = String(cmd[range])
         }
         super.init(target: _target, name: String(arr[0]), content: content)
@@ -224,19 +228,24 @@ class CommandCompileSwiftSources: Command {
 }
 
 class CommandCompileSwift: Command {
-
     var arch: String
-    var inputPath: String
+    var inputPath: String?
+    var outputPath: String?
 
-    required init?(desc: String, content: [String]) {
+    required init?(desc: String, content: [String], target: String = "") {
         let arr = desc.split(separator: " ")
         if arr.count == 4 {
             self.arch = String(arr[2])
             self.inputPath = String(arr[3])
-            
+
             var _target = ""
-            if let cmd = content.last, let range = cmd.rangeOfOptionContent(option: "-module-name", reverse: false) {
+            if target != "" {
+                _target = target
+            } else if let cmd = content.last, let range = cmd.rangeOfOptionContent(option: "-module-name", reverse: false) {
                 _target = String(cmd[range])
+            }
+            if let cmd = content.last, let range = cmd.rangeOfOptionContent(option: "-o", reverse: true) {
+                self.outputPath = String(cmd[range])
             }
 
             super.init(target: _target, name: String(arr[0]), content: content)
@@ -247,6 +256,7 @@ class CommandCompileSwift: Command {
     {
         case arch
         case inputPath
+        case outputPath
     }
 
     required init(from decoder: Decoder) throws
@@ -254,6 +264,7 @@ class CommandCompileSwift: Command {
         let values = try decoder.container(keyedBy: CompileSwiftKeys.self)
         self.arch = try values.decode(String.self, forKey: .arch)
         self.inputPath = try values.decode(String.self, forKey: .inputPath)
+        self.outputPath = try values.decode(String.self, forKey: .outputPath)
         try super.init(from: decoder)
     }
 
@@ -261,7 +272,12 @@ class CommandCompileSwift: Command {
     {
         var container = encoder.container(keyedBy: CompileSwiftKeys.self)
         try container.encode(arch, forKey: .arch)
-        try container.encode(inputPath, forKey: .inputPath)
+        if inputPath != nil {
+            try container.encode(inputPath, forKey: .inputPath)
+        }
+        if outputPath != nil {
+            try container.encode(outputPath, forKey: .outputPath)
+        }
         try super.encode(to: encoder)
     }
 
@@ -275,21 +291,21 @@ class CommandCompileSwift: Command {
 
     override func prepare(_ content: [String]) -> [String] {
         guard let lastLine = content.last else { return [] }
-        if !inputPath.isEmpty {
+        if let inputPath = inputPath, var outputPath = outputPath {
             guard let fileName = inputPath.getFileNameWithoutType() else { return [] }
             var newLine = lastLine
             newLine.replaceCommandLineParam(withPrefix: "-c", replaceString: "-c")
             newLine.replaceCommandLineParam(withPrefix: "-primary-file", replaceString: "-primary-file $FILEPATH")
             newLine = newLine.replacingOccurrences(of: fileName, with: "$FILENAME")
-            //outputPath = outputPath.replacingOccurrences(of: fileName, with: "$FILENAME")
-            
+            outputPath = outputPath.replacingOccurrences(of: fileName, with: "$FILENAME")
+
 
             if lastLine.contains("-filelist") {
                 newLine.replaceCommandLineParam(withPrefix: "-filelist", replaceString: "-filelist $SourceFileList")
             } else {
                 newLine.append(" -filelist $SourceFileList")
             }
-            return super.prepare(content.dropLast() + [newLine])
+            return super.prepare(["rm \(outputPath)"] + content.dropLast() + [newLine])
         } else {
             let replaceText = "-primary-file $FILEPATH " +
                 "-emit-module-path $ObjectsPATH/$FILENAME~partial.swiftmodule " +
@@ -320,12 +336,11 @@ class CommandMergeSwiftModule: Command {
     var arch: String
     var swiftmodulePath: String = ""
 
-    init?(desc: String, content: [String]) {
+    init?(desc: String, content: [String], target: String = "") {
         let arr = desc.split(separator: " ")
         guard arr.count == 4 else { return nil }
         self.arch = String(arr[2])
-        let _target = arr.last!.split(separator: "/").last!.split(separator: ".").first!
-        super.init(target: String(_target), name: String(arr[0]), content: content)
+        super.init(target: target, name: String(arr[0]), content: content)
     }
 
     enum MergeSwiftModuleKeys: String, CodingKey
@@ -394,13 +409,12 @@ class CommandLd: Command {
     var outputPath: String
     var arch: String
 
-    init?(desc: String, content: [String]) {
+    init?(desc: String, content: [String], target: String = "") {
         let arr = desc.split(separator: " ")
         guard arr.count == 4 else { return nil }
         self.outputPath = String(arr[1])
         self.arch = String(arr[3])
-        let _target = self.outputPath.split(separator: "/").last ?? ""
-        super.init(target: String(_target), name: String(arr[0]), content: content)
+        super.init(target: target, name: String(arr[0]), content: content)
     }
 
     enum LdKeys: String, CodingKey
@@ -433,11 +447,11 @@ class CommandLd: Command {
 class CommandCompileXIB: Command {
     var inputPath: String
 
-    required init?(desc: String, content: [String]) {
+    required init?(desc: String, content: [String], target: String = "") {
         let arr = desc.split(separator: " ")
         guard arr.count == 5 else { return nil }
         self.inputPath = String(arr[1])
-        let _target = arr.last!.replacingOccurrences(of: ")", with: "")
+        let _target = target.or(arr.last!.replacingOccurrences(of: ")", with: ""))
         super.init(target: _target, name: String(arr[0]), content: content)
     }
 
@@ -479,13 +493,12 @@ class CommandCopyPNGFile: Command {
     var outputPath: String
     var inputPath: String
 
-    required init?(desc: String, content: [String]) {
+    required init?(desc: String, content: [String], target: String = "") {
         let arr = desc.split(separator: " ")
-        guard arr.count == 6 else { return nil }
+        guard arr.count == 3 else { return nil }
         self.outputPath = String(arr[1])
         self.inputPath = String(arr[2])
-        let _target = arr.last!.replacingOccurrences(of: ")", with: "")
-        super.init(target: _target, name: String(arr[0]), content: content)
+        super.init(target: target, name: String(arr[0]), content: content)
     }
 
     enum CopyPNGFileKeys: String, CodingKey
@@ -530,12 +543,11 @@ class CommandCopyPNGFile: Command {
 class CommandCodeSign: Command {
     var outputPath: String
 
-    required init?(desc: String, content: [String]) {
+    required init?(desc: String, content: [String], target: String = "") {
         let arr = desc.split(separator: " ")
         guard arr.count == 2 else { return nil }
         self.outputPath = String(arr[1])
-        let _target = self.outputPath.split(separator: "/").last!.split(separator: ".").first!
-        super.init(target: String(_target), name: String(arr[0]), content: content)
+        super.init(target: target, name: String(arr[0]), content: content)
     }
 
     enum CodeSignKeys: String, CodingKey {
@@ -569,32 +581,31 @@ class CommandCodeSign: Command {
 
 // copy embeded extension and framework
 class CommandPBXCp: Command {
-    
-    required init?(desc: String, content: [String]) {
+    required init?(desc: String, content: [String], target: String = "") {
         let arr = desc.split(separator: " ")
-        let _target = arr.last!.replacingOccurrences(of: ")", with: "")
-        
+        let _target = target.or(arr.last!.replacingOccurrences(of: ")", with: ""))
+
         let input = arr[1]
         let output = arr[2]
         var newContent = Array(content.dropLast())
-        
+
         // rsync用"/"区分目录和目录内容
         newContent.append("rsync -av --exclude=.DS_Store --exclude=CVS --exclude=.svn --exclude=.git --exclude=.hg --exclude=Headers --exclude=PrivateHeaders --exclude=Modules \(input + "/") \(output)")
         super.init(target: _target, name: String(arr[0]), content: newContent)
     }
-    
+
     required init(from decoder: Decoder) throws {
         try super.init(from: decoder)
     }
-    
+
     override func encode(to encoder: Encoder) throws {
         try super.encode(to: encoder)
     }
-    
+
     override func execute(params: [String], done: (String?) -> Void) {
         super.execute(params: params, done: done)
     }
-    
+
     override func equal(to: Command) -> Bool {
         return false
     }

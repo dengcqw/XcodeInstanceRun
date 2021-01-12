@@ -18,21 +18,21 @@ func supportFile(_ line: String) -> Bool {
         || line.hasSuffix(".xib")
 }
 
-let statusPrefixLength = 3
+let statusPrefixLength = 2
 
+/// only support modified and added git files
 func supportStatus(_ line: String) -> Bool {
-    assert(line.count != 0)
-    let containD = line.prefix(upTo: line.index(line.startIndex, offsetBy: statusPrefixLength)).contains("D")
-    return !containD
+    guard line.count > statusPrefixLength else { return false }
+    let statusFlag = line.prefix(upTo: line.index(line.startIndex, offsetBy: statusPrefixLength))
+    return statusFlag.contains("M") || statusFlag.contains("A")
 }
 
 // not support file path containing whitespace
 func getModifiedFiles() -> [String] {
     if let output = readStringSync(fileHandle: Bash().execute(script: "cd \(workingDir);git status -s")) {
         return output.components(separatedBy: .newlines)
-            .filter { $0.count > statusPrefixLength } // filter invalid lines
             .filter { supportStatus($0) && supportFile($0) } // filter support lines
-            .map { String($0.suffix(from: $0.index($0.startIndex, offsetBy: statusPrefixLength))) } // get file name
+            .map { String($0.suffix(from: $0.index($0.startIndex, offsetBy: statusPrefixLength + 1 /* one space */))) } // get file name
     } else {
         return []
     }
@@ -43,13 +43,13 @@ func getFileCommandName(_ file: String) -> String {
     let type = file.suffix(from: index)
     switch type {
     case ".swift":
-        return "CompileSwift"
+        return CommandNames.CompileSwift.rawValue
     case ".c", ".m", ".mm":
-        return "CompileC"
+        return CommandNames.CompileC.rawValue
     case ".png":
-        return "CopyPNGFile"
+        return CommandNames.CopyPNGFile.rawValue
     case ".xib":
-        return "CompileXIB"
+        return CommandNames.CompileXIB.rawValue
     default:
         return ""
     }
@@ -67,20 +67,20 @@ func getCommand(commands: [Command], commandName: String) -> Command? {
 // run other command in order
 func runOtherOtherCommand(_ commands: [Command]) {
     func execute(_ command: Command) {
+        print("\(command.target) \(command.name)")
         command.execute(params: [], done: { (output) in
-            print(output ?? "")
+            if let output = output {
+                print("output: \(output )")
+            }
         })
     }
-    
+
     commands
         .filter { $0.name == "MergeSwiftModule" }
         .forEach { execute($0) }
     commands
         .filter { $0.name == "PBXCp" }
-        .forEach {
-            //print($0.content)
-            execute($0)
-    }
+        .forEach { execute($0) }
     commands
         .filter { $0.name == "Ld" }
         .forEach { execute($0) }
@@ -95,7 +95,7 @@ func runOtherOtherCommand(_ commands: [Command]) {
 
 func runCommand(target: String, simulator: Bool) {
     GloablSimulator = simulator
-    
+
     let orderedTargets = restoreOrderedTargets()
     guard orderedTargets.count > 0 else { return }
     let modifiedFiles = getModifiedFiles()
@@ -103,25 +103,25 @@ func runCommand(target: String, simulator: Bool) {
         print("Not find mofified files, exit build app")
         return
     }
-    print("build app")
-    print("==== modified files ====")
-    modifiedFiles.forEach { print($0) }
-    print("==== targets ====")
+    print("==== all targets ====")
     orderedTargets.forEach { print($0) }
-    
+    print("\n==== git modified files ====")
+    modifiedFiles.forEach { print($0) }
+
     guard let allCommands = restoreCommands() else { return }
-    
+
+    print("\n==== run commands ====")
     orderedTargets.forEach { (target) in
         guard let sourceFileList = try? String.init(contentsOfFile: getSouceFilePath(target: target)) else {
             print("read [\(target)] source file list error")
             return
         }
-        
+
         guard let commands = allCommands[target] else {
             print("restore comand error")
             return
         }
-        
+
         var sourceChaned = false
         var objPath: String = ""
         for cmd in commands {
@@ -131,7 +131,7 @@ func runCommand(target: String, simulator: Bool) {
         }
         for file in modifiedFiles.filter({ sourceFileList.contains($0) }) {
             if let command = getCommand(commands: commands, commandName: getFileCommandName(file)) {
-                print("\(command.name) \(target) \(file)")
+                print("\(command.target) \(command.name) \(file)")
                 sourceChaned = true
                 command.execute(params: [workingDir + "/" + file, objPath]) { (output) in
                     if let output = output {
@@ -145,7 +145,9 @@ func runCommand(target: String, simulator: Bool) {
             modifiedFiles
                 .filter{ $0.hasSuffix(".png") || $0.hasSuffix(".xib") }
                 .forEach({ (file) in
-                    if let command = getCommand(commands: allCommands[orderedTargets.last!]!, commandName: getFileCommandName(file)) {
+                    print(file)
+                    if let command = getCommand(commands: commands, commandName: getFileCommandName(file)) {
+                        print("\(command.target) \(command.name) \(file)")
                         command.execute(params: [workingDir + "/" + file]) { (output) in
                             if let output = output {
                                 print("output \(command.name): \(output)")
@@ -154,7 +156,7 @@ func runCommand(target: String, simulator: Bool) {
                     }
                 })
         }
-        
+
         if sourceChaned {
             runOtherOtherCommand(commands)
         }
@@ -178,9 +180,9 @@ func copyAppBundle(to dest: String, isSimulator: Bool) {
     let src = "\(workingDir)/DerivedData/Build/Products/\(folderName)"
     let app = "\(src)/*.app"
     let dsym = "\(src)/*.app.dSYM"
-    
+
     let cmd = "cp -Rf \(app) \(dsym) \(dest)"
-    
+
     _ = Bash().execute(script: cmd)
 }
 
@@ -202,14 +204,14 @@ func iosDeploy(simulator: Bool) {
             print("Not Found app bundle id")
             return
         }
-        
+
         let installScript = "xcrun simctl install \(fristDeviceUDID) \(appDir)/\(app)"
         let launchScript = "xcrun simctl launch \(fristDeviceUDID) \(bundleId)"
         deployScript = [installScript, launchScript].joined(separator: ";")
     } else {
         deployScript = "ios-deploy -b \(workingDir)/DerivedData/Build/Products/Debug-iphoneos/*.app -L"
     }
-    
+
     print(deployScript)
     if let fileHandle = Bash().execute(script: deployScript) {
         let reader = StreamReader(fileHandle: fileHandle, chunkSize: 1024)

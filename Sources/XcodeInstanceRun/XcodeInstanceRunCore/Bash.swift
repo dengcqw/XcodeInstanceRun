@@ -35,7 +35,8 @@ final class Bash: CommandExecuting {
         process.terminationHandler = { ps in
             let status = ps.terminationStatus
             if status != 0 {
-                print("Shell script failed. \(status)")
+                print("output: Shell script failed. \(status) \(status == 127 ? " command not found" : "")")
+                print(arguments)
                 exit(status)
             }
         }

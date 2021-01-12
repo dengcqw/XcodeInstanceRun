@@ -91,6 +91,7 @@ func cacheDir() -> String {
 
 
 extension Array where Element == String {
+    /// 命令后会有多余的编译warning信息，需要清除
     func filterCmd(_ prefix: String) -> [String] {
         for (index, value) in self.enumerated() {
             if value.hasPrefix(prefix) {
@@ -184,5 +185,9 @@ public extension String {
             }
         }
         return nil
+    }
+
+    func or(_ defaultValue: String) -> String {
+        return self == "" ? defaultValue : self
     }
 }
