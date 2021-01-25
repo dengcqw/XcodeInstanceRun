@@ -78,9 +78,9 @@ func runOtherOtherCommand(_ commands: [Command]) {
     commands
         .filter { $0.name == CommandNames.MergeSwiftModule.rawValue }
         .forEach { execute($0) }
-    commands
-        .filter { $0.name == CommandNames.PBXCp.rawValue }
-        .forEach { execute($0) }
+    /*commands*/
+        /*.filter { $0.name == CommandNames.PBXCp.rawValue }*/
+        /*.forEach { execute($0) }*/
     commands
         .filter { $0.name == CommandNames.Ld.rawValue }
         .forEach { execute($0) }
@@ -109,11 +109,12 @@ func runCommand() {
 
     print("\n==== run commands ====")
     orderedTargets.forEach { (target) in
-        guard let sourceFileList = try? String.init(contentsOfFile: getSouceFilePath(target: target)) else {
-            print("read [\(target)] source file list error")
-            return
-        }
-
+        let swiftContent = try? String.init(contentsOfFile: getSourceFilePath(target: target))
+        let swiftFileList = swiftContent?.split(separator: "\n") ?? []
+        let objcContent = try? String.init(contentsOfFile: getObjcSourceFilePath(target: target))
+        let objcFileList = objcContent?.split(separator: "\n") ?? []
+        assert(swiftFileList.count > 0 || objcFileList.count > 0, "file list is empty")
+       
         guard let commands = allCommands[target] else {
             print("restore comand error")
             return
@@ -126,11 +127,30 @@ func runCommand() {
                 objPath = (cmd as! CommandMergeSwiftModule).swiftmodulePath
             }
         }
-        for file in modifiedFiles.filter({ sourceFileList.contains($0) }) {
+        
+        let targetModifiedFiles = modifiedFiles.filter({
+            if $0.hasSuffix(".swift") {
+                for file in swiftFileList {
+                    if file.hasSuffix($0) {
+                        return true
+                    }
+                }
+            }
+            if $0.hasSuffix(".c") || $0.hasSuffix(".m") || $0.hasSuffix(".mm") {
+                for file in objcFileList {
+                    if file.hasSuffix($0) {
+                        return true
+                    }
+                }
+            }
+            return false
+        })
+        // compile source files
+        for file in targetModifiedFiles {
             if let command = getCommand(commands: commands, commandName: getFileCommandName(file)) {
                 print("\(command.target) \(command.name) \(file)")
                 sourceChaned = true
-                command.execute(params: [workingDir + "/" + file, objPath]) { (output) in
+                command.execute(params: [file, objPath]) { (output) in
                     if let output = output {
                         print("output \(command.name): \(output)")
                     }

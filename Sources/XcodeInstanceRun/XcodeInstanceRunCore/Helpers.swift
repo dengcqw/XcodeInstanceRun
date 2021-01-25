@@ -56,8 +56,12 @@ func tempFilePath() -> String? {
 }
 
 
-func getSouceFilePath(target: String) -> String {
+func getSourceFilePath(target: String) -> String {
     return "\(cacheDir())/\(target)-swiftfiles"
+}
+
+func getObjcSourceFilePath(target: String) -> String {
+    return "\(cacheDir())/\(target)-objcfiles"
 }
 
 func getModuleFilePath(target: String) -> String {

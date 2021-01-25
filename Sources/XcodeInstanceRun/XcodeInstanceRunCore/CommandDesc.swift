@@ -31,7 +31,7 @@ class Command: Codable, CommandDescription {
     func execute(params: [String], done: (String?)->Void) {
         let bash: CommandExecuting = Bash()
         // ignore compile warnings output
-        guard let fileHandle = bash.execute(script: (params + content).joined(separator: ";") + " &>/dev/null") else {
+        guard let fileHandle = bash.execute(script: (params + content).joined(separator: ";")) else {
             done(nil)
             return
         }
@@ -220,7 +220,7 @@ class CommandCompileSwiftSources: Command {
             }
         }
         do {
-            try fileList.write(toFile: getSouceFilePath(target: target), atomically: true, encoding: .utf8)
+            try fileList.write(toFile: getSourceFilePath(target: target), atomically: true, encoding: .utf8)
         } catch _ {
             print("cache swift files error")
         }
@@ -283,7 +283,7 @@ class CommandCompileSwift: Command {
 
     override func execute(params: [String], done: (String?) -> Void) {
         guard params.count == 2 else { return }
-        let sourceFileList = getSouceFilePath(target: target)
+        let sourceFileList = getSourceFilePath(target: target)
         guard let filePath = params.first, let fileName = filePath.getFileNameWithoutType() else { return }
         let defines = ["FILEPATH=\(filePath)", "FILENAME=\(fileName)", "SourceFileList=\(sourceFileList)", "ObjectsPATH=\(params[1])"]
         super.execute(params: defines, done: done)
@@ -295,10 +295,9 @@ class CommandCompileSwift: Command {
             guard let fileName = inputPath.getFileNameWithoutType() else { return [] }
             var newLine = lastLine
             newLine.replaceCommandLineParam(withPrefix: "-c", replaceString: "-c")
-            newLine.replaceCommandLineParam(withPrefix: "-primary-file", replaceString: "-primary-file $FILEPATH")
+            newLine.replaceCommandLineParam(withPrefix: "-primary-file", replaceString: "-primary-file \(workingDir)/$FILEPATH")
             newLine = newLine.replacingOccurrences(of: fileName, with: "$FILENAME")
             outputPath = outputPath.replacingOccurrences(of: fileName, with: "$FILENAME")
-
 
             if lastLine.contains("-filelist") {
                 newLine.replaceCommandLineParam(withPrefix: "-filelist", replaceString: "-filelist $SourceFileList")
@@ -440,6 +439,7 @@ class CommandLd: Command {
     }
 
     override func execute(params: [String], done: (String?) -> Void) {
+        self.content.append(self.content.popLast()!.appending(" &>/dev/null"))
         super.execute(params: params, done: done)
     }
 }

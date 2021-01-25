@@ -38,6 +38,7 @@ struct StdinSource: LogSource {
 
 let targets = getProjectTargets()
 var orderedTargets: [String] = []
+var objcFileList: [String] = []
 
 func addCommand(_ commands: inout [String: [Command]], _ command: Command) {
     guard targets.contains(command.target) else {
@@ -98,7 +99,11 @@ func createCommand(target: String, commandLines: [String]) -> Command? {
     case .CompileSwift:
         return CommandCompileSwift(desc: desc, content: content, target: target)
     case .CompileC:
-        return CommandCompileC(desc: desc, content: content, target: target)
+        let cmd = CommandCompileC(desc: desc, content: content, target: target)
+        if let file = cmd?.inputPath {
+            objcFileList.append(file)
+        }
+        return cmd
     case .CopyPNGFile:
         return CommandCopyPNGFile(desc: desc, content: content, target: target)
     case .CompileXIB:
@@ -151,11 +156,24 @@ func parse(_ logSource: LogSource, simulator: Bool) {
         }
         tmpLines = []
     }
+    
+    func saveObjcFiles() {
+        do {
+            let objcPath = getObjcSourceFilePath(target: currentTarget)
+            try objcFileList
+                .joined(separator: "\n")
+                .write(toFile: objcPath, atomically: true, encoding: .utf8)
+        } catch _ {
+            print("cache objc files error")
+        }
+        objcFileList.removeAll()
+    }
 
     while let line = reader?.nextLine() {
         let text = String(line)
         if text.hasPrefix("=== BUILD TARGET") {
             createCommandIfPossible()
+            saveObjcFiles() // start new target, save last target objc files
             currentTarget = String(text.split(separator: " ")[3])
         } else if isCommand(text) {
             createCommandIfPossible()
@@ -165,6 +183,7 @@ func parse(_ logSource: LogSource, simulator: Bool) {
         }
     }
     createCommandIfPossible()
+    saveObjcFiles() // last target objc files
     if commands.count > 0 {
         storeCommands(commands)
         storeOrderedTargets(orderedTargets)
